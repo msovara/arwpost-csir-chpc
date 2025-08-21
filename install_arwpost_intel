@@ -1,0 +1,418 @@
+#!/bin/bash
+
+# ARWpost Installation Script for Lengau Cluster (Compatible Modules)
+# Using Intel Parallel Studio XE 16.0.1 with compatible NetCDF/HDF5 modules
+# This script compiles and installs ARWpost from pre-downloaded source
+
+set -e  # Exit on any error
+
+# Configuration
+INSTALL_DIR="/mnt/lustre/users/msovara/SoftwareBuilds/ARWpost"
+BUILD_DIR="${INSTALL_DIR}/build"
+
+echo "=== ARWpost Installation Script for Lengau (Compatible Modules) ==="
+echo "Installation directory: ${INSTALL_DIR}"
+echo "Build directory: ${BUILD_DIR}"
+echo "Intel Parallel Studio XE 16.0.1 (compatible with available modules)"
+echo ""
+
+# Detect downloaded version dynamically from build_info.txt
+if [ ! -f "${INSTALL_DIR}/build_info.txt" ]; then
+    echo "✗ build_info.txt not found! Please run download_arwpost.sh first."
+    exit 1
+fi
+
+ARWPOST_VERSION=$(grep "^Version:" "${INSTALL_DIR}/build_info.txt" | awk '{print $2}')
+EXTRACTED_DIR=$(grep "^Extracted Source:" "${INSTALL_DIR}/build_info.txt" | awk '{print $3}')
+
+echo "Detected ARWpost version: ${ARWPOST_VERSION}"
+echo "Extracted directory: ${EXTRACTED_DIR}"
+
+# Verify build directory
+if [ ! -d "${BUILD_DIR}" ] || [ -z "$(ls -A ${BUILD_DIR})" ]; then
+    echo "✗ Build directory empty or not found. Copying extracted source..."
+    cp -r "${INSTALL_DIR}/source/${EXTRACTED_DIR}"/* "${BUILD_DIR}/"
+fi
+echo "✓ Build directory ready"
+
+# Load Intel Parallel Studio XE 16.0.1 (compatible with available modules)
+echo "Loading Intel Parallel Studio XE 16.0.1..."
+module purge
+module load chpc/parallel_studio_xe/16.0.1/2016.1.150
+
+# Source Intel MPI environment (adjust path for Intel 16.0.1)
+echo "Setting up Intel MPI environment..."
+if [ -f "/apps/compilers/intel/parallel_studio_xe_2016_update1/compilers_and_libraries/linux/mpi/bin64/mpivars.sh" ]; then
+    source /apps/compilers/intel/parallel_studio_xe_2016_update1/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+elif [ -f "/apps/compilers/intel/parallel_studio_xe_2016/compilers_and_libraries/linux/mpi/bin64/mpivars.sh" ]; then
+    source /apps/compilers/intel/parallel_studio_xe_2016/compilers_and_libraries/linux/mpi/bin64/mpivars.sh
+else
+    echo "⚠ Intel MPI environment script not found, continuing without MPI..."
+fi
+
+echo "✓ Intel Parallel Studio XE 16.0.1 loaded"
+
+# Load compatible NetCDF and HDF5 modules
+echo "Loading compatible NetCDF and HDF5 modules..."
+
+# First, check what zlib modules are available
+echo "Checking available zlib modules..."
+module avail chpc/zlib 2>/dev/null | grep -E "(zlib|intel)" | head -5
+
+# Load zlib first (required by HDF5)
+echo "Loading zlib module..."
+if module load chpc/zlib/1.2.8/intel/16.0.1 2>/dev/null; then
+    echo "✓ Loaded chpc/zlib/1.2.8/intel/16.0.1"
+elif module load chpc/zlib/1.2.8/intel-2016 2>/dev/null; then
+    echo "✓ Loaded chpc/zlib/1.2.8/intel-2016"
+else
+    echo "⚠ Could not load zlib module, trying to continue..."
+fi
+
+# Load NetCDF
+echo "Loading NetCDF module..."
+if module load chpc/netcdf/4.1.3/intel-2016 2>/dev/null; then
+    echo "✓ Loaded chpc/netcdf/4.1.3/intel-2016"
+else
+    echo "✗ Failed to load NetCDF module"
+    exit 1
+fi
+
+# Load HDF5 (should work now with zlib loaded)
+echo "Loading HDF5 module..."
+if module load chpc/hdf5/1.8.16/intel/16.0.1 2>/dev/null; then
+    echo "✓ Loaded chpc/hdf5/1.8.16/intel/16.0.1"
+else
+    echo "✗ Failed to load HDF5 module"
+    echo "  This might be due to missing zlib dependency"
+    exit 1
+fi
+
+echo "✓ All required modules loaded"
+
+# Set compiler environment
+export FC=ifort
+export CC=icc
+export CXX=icpc
+
+# Debug: Check what environment variables are set by the modules
+echo "Debug: Checking module environment variables..."
+echo "NETCDF_ROOT: ${NETCDF_ROOT:-'not set'}"
+echo "HDF5_ROOT: ${HDF5_ROOT:-'not set'}"
+echo "NETCDF: ${NETCDF:-'not set'}"
+echo "HDF5: ${HDF5:-'not set'}"
+
+# Check for other possible variable names
+echo "Checking for other NetCDF/HDF5 variables..."
+env | grep -i netcdf | head -5
+env | grep -i hdf5 | head -5
+
+# Set NetCDF path - try different possible variable names
+if [ -n "$NETCDF_ROOT" ]; then
+    export NETCDF=${NETCDF_ROOT}
+    echo "✓ Using NETCDF_ROOT: ${NETCDF}"
+elif [ -n "$NETCDF" ]; then
+    echo "✓ Using existing NETCDF: ${NETCDF}"
+else
+    # Try to find NetCDF in common module paths
+    for var in NETCDF_DIR NETCDF_HOME NETCDF_PATH; do
+        if [ -n "${!var}" ]; then
+            export NETCDF=${!var}
+            echo "✓ Using ${var}: ${NETCDF}"
+            break
+        fi
+    done
+    
+    # If still not found, try to find it in the module path
+    if [ -z "$NETCDF" ]; then
+        echo "⚠ NETCDF not found in environment variables"
+        echo "  Will try to find it in module paths..."
+        
+        # Extract NetCDF path from CPATH or LIBRARY_PATH
+        if [ -n "$CPATH" ]; then
+            for path in $(echo $CPATH | tr ':' ' '); do
+                if [[ "$path" == *"netcdf"* ]] && [ -f "${path}/netcdf.h" ]; then
+                    # Remove /include from the path to get the root
+                    export NETCDF=$(dirname "$path")
+                    echo "✓ Found NetCDF from CPATH: ${NETCDF}"
+                    break
+                fi
+            done
+        fi
+        
+        # If still not found, try LIBRARY_PATH
+        if [ -z "$NETCDF" ] && [ -n "$LIBRARY_PATH" ]; then
+            for path in $(echo $LIBRARY_PATH | tr ':' ' '); do
+                if [[ "$path" == *"netcdf"* ]] && [ -f "${path}/libnetcdf.a" ]; then
+                    # Remove /lib from the path to get the root
+                    export NETCDF=$(dirname "$path")
+                    echo "✓ Found NetCDF from LIBRARY_PATH: ${NETCDF}"
+                    break
+                fi
+            done
+        fi
+        
+        # If still not found, try common module installation paths
+        if [ -z "$NETCDF" ]; then
+            for path in /cm/shared/apps/chpc/netcdf /apps/chpc/netcdf /usr/local/netcdf /opt/netcdf; do
+                if [ -f "${path}/include/netcdf.h" ]; then
+                    export NETCDF=${path}
+                    echo "✓ Found NetCDF at: ${NETCDF}"
+                    break
+                fi
+            done
+        fi
+    fi
+fi
+
+# Set HDF5 path - try different possible variable names
+if [ -n "$HDF5_ROOT" ]; then
+    export HDF5=${HDF5_ROOT}
+    echo "✓ Using HDF5_ROOT: ${HDF5}"
+elif [ -n "$HDF5" ]; then
+    echo "✓ Using existing HDF5: ${HDF5}"
+else
+    # Try to find HDF5 in common module paths
+    for var in HDF5_DIR HDF5_HOME HDF5_PATH; do
+        if [ -n "${!var}" ]; then
+            export HDF5=${!var}
+            echo "✓ Using ${var}: ${HDF5}"
+            break
+        fi
+    done
+    
+    # If still not found, try to find it in the module path
+    if [ -z "$HDF5" ]; then
+        echo "⚠ HDF5 not found in environment variables"
+        echo "  Will try to find it in module paths..."
+        
+        # Extract HDF5 path from CPATH or LIBRARY_PATH
+        if [ -n "$CPATH" ]; then
+            for path in $(echo $CPATH | tr ':' ' '); do
+                if [[ "$path" == *"hdf5"* ]] && [ -f "${path}/hdf5.h" ]; then
+                    # Remove /include from the path to get the root
+                    export HDF5=$(dirname "$path")
+                    echo "✓ Found HDF5 from CPATH: ${HDF5}"
+                    break
+                fi
+            done
+        fi
+        
+        # If still not found, try LIBRARY_PATH
+        if [ -z "$HDF5" ] && [ -n "$LIBRARY_PATH" ]; then
+            for path in $(echo $LIBRARY_PATH | tr ':' ' '); do
+                if [[ "$path" == *"hdf5"* ]] && [ -f "${path}/libhdf5.a" ]; then
+                    # Remove /lib from the path to get the root
+                    export HDF5=$(dirname "$path")
+                    echo "✓ Found HDF5 from LIBRARY_PATH: ${HDF5}"
+                    break
+                fi
+            done
+        fi
+        
+        # If still not found, try common module installation paths
+        if [ -z "$HDF5" ]; then
+            for path in /cm/shared/apps/chpc/hdf5 /apps/chpc/hdf5 /usr/local/hdf5 /opt/hdf5; do
+                if [ -f "${path}/include/hdf5.h" ]; then
+                    export HDF5=${path}
+                    echo "✓ Found HDF5 at: ${HDF5}"
+                    break
+                fi
+            done
+        fi
+    fi
+fi
+
+# Set compiler flags with proper NetCDF linking
+export FCFLAGS="-O2 -xHost"
+export CFLAGS="-O2 -xHost"
+export CXXFLAGS="-O2 -xHost"
+
+# Set NetCDF-specific flags for proper linking
+if [ -n "$NETCDF" ]; then
+    export CPPFLAGS="-I${NETCDF}/include"
+    export LDFLAGS="-L${NETCDF}/lib"
+    export LIBS="-lnetcdff -lnetcdf"
+    echo "✓ Set NetCDF linking flags:"
+    echo "  CPPFLAGS: ${CPPFLAGS}"
+    echo "  LDFLAGS: ${LDFLAGS}"
+    echo "  LIBS: ${LIBS}"
+else
+    echo "⚠ NETCDF not set, linking may fail"
+fi
+
+echo "Environment variables set:"
+echo "FC (Fortran): ${FC}"
+echo "CC (C): ${CC}"
+echo "CXX (C++): ${CXX}"
+echo "NETCDF: ${NETCDF}"
+echo "HDF5: ${HDF5}"
+echo "FCFLAGS: ${FCFLAGS}"
+echo "CPPFLAGS: ${CPPFLAGS}"
+echo "LDFLAGS: ${LDFLAGS}"
+echo "LIBS: ${LIBS}"
+echo ""
+
+# Verify compilers
+echo "Verifying Intel compilers..."
+for compiler in ifort icc icpc; do
+    command -v $compiler >/dev/null 2>&1 || { echo "✗ $compiler not found!"; exit 1; }
+done
+echo "✓ Intel compilers verified"
+
+# Verify MPI (optional)
+if command -v mpicc &> /dev/null; then
+    echo "✓ Intel MPI found: $(mpicc --version | head -1)"
+else
+    echo "⚠ Intel MPI not found (will compile without MPI support)"
+fi
+
+# Verify NetCDF libraries
+echo "Verifying NetCDF libraries..."
+if [ -n "$NETCDF" ]; then
+    if [ -f "${NETCDF}/lib/libnetcdf.a" ] || [ -f "${NETCDF}/lib/libnetcdf.so" ]; then
+        echo "✓ NetCDF C library found"
+    else
+        echo "✗ NetCDF C library not found in ${NETCDF}/lib/"
+    fi
+    
+    if [ -f "${NETCDF}/lib/libnetcdff.a" ] || [ -f "${NETCDF}/lib/libnetcdff.so" ]; then
+        echo "✓ NetCDF Fortran library found"
+    else
+        echo "✗ NetCDF Fortran library not found in ${NETCDF}/lib/"
+        echo "  This may cause linking errors"
+    fi
+else
+    echo "⚠ NETCDF path not set"
+fi
+echo ""
+
+# Change to build directory
+cd "${BUILD_DIR}"
+echo "Current directory: $(pwd)"
+
+# Configure, compile, install
+echo "Configuring ARWpost..."
+./configure
+
+echo "Checking build files after configuration..."
+ls -la
+
+echo "Compiling ARWpost..."
+# ARWpost might use different build methods
+if [ -f "Makefile" ]; then
+    echo "✓ Using Makefile for compilation..."
+    make clean
+    make
+elif [ -f "compile" ]; then
+    echo "✓ Using compile script for compilation..."
+    ./compile
+elif [ -f "src/Makefile" ]; then
+    echo "✓ Using src/Makefile for compilation..."
+    cd src
+    make clean
+    make
+    cd ..
+else
+    echo "✗ No build system found after configuration"
+    echo "Available files:"
+    ls -la
+    echo ""
+    echo "Trying to find ARWpost executable..."
+    find . -name "ARWpost" -type f 2>/dev/null || echo "ARWpost executable not found"
+    exit 1
+fi
+
+# Install
+echo "Installing ARWpost..."
+mkdir -p ${INSTALL_DIR}/bin
+mkdir -p ${INSTALL_DIR}/share/arwpost
+cp ARWpost ${INSTALL_DIR}/bin/
+cp -r * ${INSTALL_DIR}/share/arwpost/
+
+# Create module file
+mkdir -p ${INSTALL_DIR}/modulefiles
+cat > ${INSTALL_DIR}/modulefiles/arwpost-lengau << EOF
+#%Module1.0
+proc ModulesHelp { } {
+    puts stderr "ARWpost post-processing tool for WRF"
+    puts stderr "Compiled with Intel Parallel Studio XE 16.0.1"
+    puts stderr "Using compatible NetCDF and HDF5 modules"
+}
+module-whatis "ARWpost - WRF post-processing tool (Lengau Intel optimized)"
+set version "${ARWPOST_VERSION}"
+set arwpost_root "${INSTALL_DIR}"
+prepend-path PATH \${arwpost_root}/bin
+prepend-path MANPATH \${arwpost_root}/share/arwpost
+setenv ARWPOST_ROOT \${arwpost_root}
+setenv ARWPOST_VERSION \${version}
+setenv ARWPOST_COMPILER "intel-16.0.1"
+EOF
+
+# Setup script
+cat > ${INSTALL_DIR}/setup_arwpost_lengau.sh << EOF
+#!/bin/bash
+# Setup script for ARWpost on Lengau Cluster (Compatible Modules)
+
+# Load Intel Parallel Studio XE 16.0.1
+module load chpc/parallel_studio_xe/16.0.1/2016.1.150
+
+# Load compatible modules in correct order
+module load chpc/zlib/1.2.8/intel/16.0.1
+module load chpc/netcdf/4.1.3/intel-2016
+module load chpc/hdf5/1.8.16/intel/16.0.1
+
+# Set ARWpost environment
+export ARWPOST_ROOT="${INSTALL_DIR}"
+export PATH="\${ARWPOST_ROOT}/bin:\${PATH}"
+export ARWPOST_COMPILER="intel-16.0.1"
+
+echo "ARWpost environment set up for Lengau (Compatible Modules):"
+echo "ARWPOST_ROOT: \${ARWPOST_ROOT}"
+echo "ARWPOST_COMPILER: \${ARWPOST_COMPILER}"
+echo "ARWpost executable: \$(which ARWpost)"
+echo ""
+echo "Intel Parallel Studio XE 16.0.1 loaded"
+echo "Compatible zlib, NetCDF and HDF5 modules loaded"
+EOF
+chmod +x ${INSTALL_DIR}/setup_arwpost_lengau.sh
+
+# Installation log
+cat > ${INSTALL_DIR}/install_log.txt << EOF
+ARWpost Installation Log (Compatible Modules)
+==============================================
+Installation Date: $(date)
+ARWpost Version: ${ARWPOST_VERSION}
+Installation Directory: ${INSTALL_DIR}
+Build Directory: ${BUILD_DIR}
+Compiler: Intel Parallel Studio XE 16.0.1
+NetCDF: ${NETCDF}
+HDF5: ${HDF5}
+Modules Used:
+- chpc/parallel_studio_xe/16.0.1/2016.1.150
+- chpc/zlib/1.2.8/intel/16.0.1
+- chpc/netcdf/4.1.3/intel-2016
+- chpc/hdf5/1.8.16/intel/16.0.1
+
+Compilation completed successfully!
+EOF
+
+# Test installation
+${INSTALL_DIR}/bin/ARWpost --help || echo "ARWpost executable found but help not available"
+
+echo ""
+echo "=== Installation Complete (Lengau Intel - Compatible Modules) ==="
+echo "ARWpost installed to: ${INSTALL_DIR}"
+echo "Compiled with: Intel Parallel Studio XE 16.0.1"
+echo "Using compatible NetCDF and HDF5 modules"
+echo ""
+echo "Module file: ${INSTALL_DIR}/modulefiles/arwpost-lengau"
+echo "Setup script: ${INSTALL_DIR}/setup_arwpost_lengau.sh"
+echo ""
+echo "To use ARWpost:"
+echo "1. Load the module: module load ${INSTALL_DIR}/modulefiles/arwpost-lengau"
+echo "2. Or source the setup script: source ${INSTALL_DIR}/setup_arwpost_lengau.sh"
+echo "3. Run ARWpost: ARWpost"
+echo ""
+echo "Installation completed successfully!"
+

@@ -1,0 +1,17 @@
+ARWpost Build Information
+=========================
+Version: V3
+Download Date: Tue Aug 19 15:36:06 SAST 2025
+Download URL: http://www2.mmm.ucar.edu/wrf/src/ARWpost_V3.tar.gz
+Source Directory: /mnt/lustre/users/msovara/SoftwareBuilds/ARWpost/source
+Build Directory: /mnt/lustre/users/msovara/SoftwareBuilds/ARWpost/build
+Installation Directory: /mnt/lustre/users/msovara/SoftwareBuilds/ARWpost
+
+Files:
+- Source Archive: /mnt/lustre/users/msovara/SoftwareBuilds/ARWpost/source/ARWpost_V3.tar.gz
+- Extracted Source: /mnt/lustre/users/msovara/SoftwareBuilds/ARWpost/source/ARWpost
+- Build Directory: /mnt/lustre/users/msovara/SoftwareBuilds/ARWpost/build
+
+Next Steps:
+1. Run install_arwpost_lengau_intel.sh on a compute node
+2. The build directory is ready for compilation

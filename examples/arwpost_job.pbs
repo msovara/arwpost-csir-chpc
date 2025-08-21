@@ -1,0 +1,29 @@
+#!/bin/bash
+#PBS -N arwpost_job
+#PBS -l select=1:ncpus=4:mem=8gb
+#PBS -l walltime=02:00:00
+#PBS -q normal
+#PBS -j oe
+#PBS -o arwpost_output.log
+
+cd $PBS_O_WORKDIR
+module purge
+module load arwpost/3.1
+
+export OMP_NUM_THREADS=4
+export ARWPOST_INPUT_DIR="/path/to/your/wrf/output"
+export ARWPOST_OUTPUT_DIR="/path/to/your/output"
+
+mkdir -p $ARWPOST_OUTPUT_DIR
+
+echo "Starting ARWpost processing at $(date)"
+run_arwpost
+
+if [ $? -eq 0 ]; then
+    echo "ARWpost completed successfully at $(date)"
+else
+    echo "ARWpost failed at $(date)"
+    exit 1
+fi
+
+echo "Job completed successfully"

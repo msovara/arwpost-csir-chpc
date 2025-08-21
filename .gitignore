@@ -1,0 +1,36 @@
+# Build artifacts
+build/
+*.o
+*.mod
+*.exe
+*.out
+
+# Log files
+*.log
+install_log.txt
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Module files (these are system-specific)
+modulefiles/
+
+# Source code (if you don't want to include it)
+source/
+
+# Binary files
+bin/
+
+# Test files
+test_netcdf.f90
+debug_netcdf.sh
+
+# Backup files
+*.backup
+*.bak
+
+# OS files
+.DS_Store
+Thumbs.db
