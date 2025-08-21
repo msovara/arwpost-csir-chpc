@@ -308,7 +308,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ---
 
-**📅 Last Updated**: August 2024  
+**📅 Last Updated**: August 2025  
 **🏷️ Version**: 3.1  
 **🖥️ Cluster**: Lengau (CHPC)  
 **🔧 Compiler**: Intel Parallel Studio XE 16.0.1
