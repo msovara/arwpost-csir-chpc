@@ -2,7 +2,7 @@
 [![Cluster: Lengau](https://img.shields.io/badge/Cluster-Lengau-blue.svg)](https://www.chpc.ac.za/)
 [![Compiler: Intel](https://img.shields.io/badge/Compiler-Intel%20Parallel%20Studio%20XE%2016.0.1-orange.svg)]()
 
-# �� ARWpost Installation Guide for Lengau Cluster
+# ARWpost Installation Guide for Lengau Cluster
 
 This guide provides comprehensive instructions for installing ARWpost (WRF post-processing tool) on the Lengau cluster at CHPC using Intel compilers.
 
