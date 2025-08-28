@@ -16,13 +16,6 @@ This guide provides comprehensive instructions for installing ARWpost (WRF post-
 ## ⚡ Quick Start
 
 ```bash
-# Clone repository
-git clone https://github.com/msovara/arwpost-csir-chpc.git
-cd arwpost-csir-chpc
-
-# Run installation (if you have cluster access)
-./scripts/install_arwpost_minimal_final.sh
-
 # Load module and test
 module load chpc/earth/arwpost/3.1
 run_arwpost
