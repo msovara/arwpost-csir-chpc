@@ -24,7 +24,7 @@ cd arwpost-csir-chpc
 ./scripts/install_arwpost_minimal_final.sh
 
 # Load module and test
-module load arwpost/3.1
+module load chpc/earth/arwpost/3.1
 run_arwpost
 ```
 
