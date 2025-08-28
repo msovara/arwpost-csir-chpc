@@ -163,11 +163,6 @@ The module sets the following environment variables:
    run_arwpost
    ```
 
-3. **❓ Check available modules**:
-   ```bash
-   module help chpc/earth/arwpost/3.1
-   ```
-
 ### 📜 Sample PBS Job Script
 
 Here's a sample PBS job script for running ARWpost on the Lengau cluster:
