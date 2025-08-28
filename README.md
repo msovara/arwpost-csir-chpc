@@ -155,7 +155,7 @@ The module sets the following environment variables:
 
 1. **📦 Load the module**:
    ```bash
-   module load arwpost/3.1
+   module load chpc/earth/arwpost/3.1
    ```
 
 2. **🚀 Run ARWpost**:
@@ -165,7 +165,7 @@ The module sets the following environment variables:
 
 3. **❓ Check available modules**:
    ```bash
-   module help arwpost/3.1
+   module help chpc/earth/arwpost/3.1
    ```
 
 ### 📜 Sample PBS Job Script
@@ -183,7 +183,7 @@ Here's a sample PBS job script for running ARWpost on the Lengau cluster:
 
 cd $PBS_O_WORKDIR
 module purge
-module load arwpost/3.1
+module load chpc/earth/arwpost/3.1
 
 export OMP_NUM_THREADS=4
 export ARWPOST_INPUT_DIR="/path/to/your/wrf/output"
