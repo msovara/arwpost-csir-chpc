@@ -95,7 +95,7 @@ module avail chpc/zlib
 ### 📦 Loading the Module
 
 ```bash
-module load arwpost/3.1
+module load chpc/earth/arwpost/3.1
 ```
 
 ### 🚀 Running ARWpost
